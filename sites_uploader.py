@@ -13,8 +13,18 @@ import gdata.gauth
 import gdata.sites.client
 import gdata.sites.data
 
+import oneshot
+
 VERSION = '1.0'
 SOURCE = 'Dom-SitesUploader-%s' % VERSION
+
+# OAuth bits.  We use “anonymous” to behave as an unregistered  application.
+# Maybe I'll register later on if I figure this stuff out…
+CONSUMER_KEY = 'anonymous'
+CONSUMER_SECRET = 'anonymous'
+# TODO: limit scope to just what we actually need.
+SCOPES = ['http://sites.google.com/feeds/',
+          'https://sites.google.com/feeds/']
 
 def die(msg):
   me = os.path.basename(sys.argv[0])
@@ -55,32 +65,43 @@ def GetParser():
                     help='Use https for communications (%default)')
   parser.add_option('--debug', dest='debug', action='store_true', default=False,
                     help='Enable debug output (HTTP conversation)')
-  parser.add_option('--email', dest='email',
-                    help='Username.  If no "@", then @domain will be added')
   parser.add_option('--content_type', dest='content_type',
                     default='application/octet-stream',
                     help='Content-type of file to be uploaded (%default)')
   parser.add_option('--page', dest='page', help='* Page to upload to')
   return parser
 
-def FetchClientToken(client, email):
+def FetchClientToken(client):
   """Ensure client has a valid token."""
   token = ReadToken()
-  if not token:
-    client.ClientLogin(opts.email,
-                       getpass.getpass('Password for %s: ' % opts.email),
-                       SOURCE)
-    WriteToken(client.auth_token.token_string)
+  if token:
+    (token, token_secret) = token.split(':')
+    access_token = gdata.gauth.OAuthHmacToken(CONSUMER_KEY, CONSUMER_SECRET,
+                                              token, token_secret,
+                                              gdata.gauth.ACCESS_TOKEN)
   else:
-    client.auth_token = gdata.gauth.ClientLoginToken(token)
+    httpd = oneshot.ParamsReceiverServer()
+    # TODO Find a way to pass "xoauth_displayname" parameter.
+    request_token = client.GetOAuthToken(
+        SCOPES, httpd.my_url(), CONSUMER_KEY, consumer_secret=CONSUMER_SECRET)
+    url = request_token.generate_authorization_url(google_apps_domain=client.domain)
+    print 'Please visit this URL to continue authorization:'
+    print url
+    httpd.serve_until_result()
+    request_token = gdata.gauth.AuthorizeRequestToken(request_token, httpd.result)
+    access_token = client.GetAccessToken(request_token)
+    # Have to serialize the access_token (a gdata.gauth.OAuthHmacToken).
+    # It would be nicer to pickle perhaps?
+    WriteToken(':'.join([access_token.token, access_token.token_secret]))
+  client.auth_token = access_token
 
-def GetClient(site, domain, ssl, email, debug=False):
+def GetClient(site, domain, ssl, debug=False):
   """Return a populated SitesClient object."""
   client = gdata.sites.client.SitesClient(source=SOURCE, site=site,
                                           domain=domain)
   client.ssl = ssl
   client.http_client.debug = debug
-  FetchClientToken(client, email)
+  FetchClientToken(client)
   return client
 
 def GetPage(client, page):
@@ -125,11 +146,7 @@ def main():
   if not opts.page.startswith('/'):
     opts.page = '/' + opts.page
 
-  if not '@' in opts.email:
-    opts.email += '@' + opts.domain
-
-  client = GetClient(opts.site, opts.domain, opts.ssl, opts.email,
-                     debug=opts.debug)
+  client = GetClient(opts.site, opts.domain, opts.ssl, debug=opts.debug)
 
   # Find the parent page.
   parent = GetPage(client, opts.page)
