@@ -28,10 +28,7 @@ class ParamsReceiverServer(BaseHTTPServer.HTTPServer):
 
     def do_GET(self):
       """Capture the query string and return."""
-      if '?' in self.path:
-        params = cgi.parse_qs(self.path.split('?')[1])
-        if params:
-          self.server.result = params
+      self.server.result = self.path
       msg = '<h1>All Done</h1>\n<p>Thanks!  You may close this window now.</p>\n'
       self.send_response(200)
       self.send_header('Content-Length', str(len(msg)))
