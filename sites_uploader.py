@@ -6,6 +6,7 @@
 import getpass
 import optparse
 import os
+import pickle
 import sys
 
 import gdata.data
@@ -38,18 +39,21 @@ def TokenFile():
 
 def ReadToken():
   """Read in the stored auth token."""
-  if os.path.exists(TokenFile()):
-    return open(TokenFile()).readline().rstrip()
+  file = TokenFile()
+  if os.path.exists(file):
+    fh = open(file, 'rb')
+    tok = pickle.load(fh)
+    fh.close()
+    return tok
   else:
     return None
 
 def WriteToken(tok):
   """Write token to a file."""
   path = TokenFile()
-  fh = open(path, 'w')
+  fh = open(path, 'wb')
   os.chmod(path, 0600)
-  fh.write(tok)
-  fh.write('\n')
+  pickle.dump(tok, fh)
   fh.close()
 
 def GetParser():
@@ -73,13 +77,8 @@ def GetParser():
 
 def FetchClientToken(client):
   """Ensure client has a valid token."""
-  token = ReadToken()
-  if token:
-    (token, token_secret) = token.split(':')
-    access_token = gdata.gauth.OAuthHmacToken(CONSUMER_KEY, CONSUMER_SECRET,
-                                              token, token_secret,
-                                              gdata.gauth.ACCESS_TOKEN)
-  else:
+  access_token = ReadToken()
+  if not access_token:
     httpd = oneshot.ParamsReceiverServer()
     # TODO Find a way to pass "xoauth_displayname" parameter.
     request_token = client.GetOAuthToken(
@@ -90,9 +89,7 @@ def FetchClientToken(client):
     httpd.serve_until_result()
     request_token = gdata.gauth.AuthorizeRequestToken(request_token, httpd.result)
     access_token = client.GetAccessToken(request_token)
-    # Have to serialize the access_token (a gdata.gauth.OAuthHmacToken).
-    # It would be nicer to pickle perhaps?
-    WriteToken(':'.join([access_token.token, access_token.token_secret]))
+    WriteToken(access_token)
   client.auth_token = access_token
 
 def GetClient(site, domain, ssl, debug=False):
