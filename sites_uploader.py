@@ -19,8 +19,8 @@ import oneshot
 VERSION = '1.0'
 SOURCE = 'Dom-SitesUploader-%s' % VERSION
 
-# OAuth bits.  We use “anonymous” to behave as an unregistered  application.
-# Maybe I'll register later on if I figure this stuff out…
+# OAuth bits.  We use “anonymous” to behave as an unregistered application.
+# http://code.google.com/apis/accounts/docs/OAuth_ref.html#SigningOAuth
 CONSUMER_KEY = 'anonymous'
 CONSUMER_SECRET = 'anonymous'
 # TODO: limit scope to just what we actually need.
