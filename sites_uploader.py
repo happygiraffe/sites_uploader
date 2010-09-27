@@ -27,6 +27,9 @@ CONSUMER_SECRET = 'anonymous'
 SCOPES = ['http://sites.google.com/feeds/',
           'https://sites.google.com/feeds/']
 
+class Error(Exception):
+  pass
+
 class ClientAuthorizer():
   """Add authorization to a client."""
 
@@ -85,10 +88,87 @@ class ClientAuthorizer():
       self.WriteToken(access_token)
     client.auth_token = access_token
 
-def die(msg):
-  me = os.path.basename(sys.argv[0])
-  print >>sys.stderr, me + ": " + msg
-  sys.exit(1)
+
+class SitesUploader(object):
+  """A utility to upload a file to a sites page."""
+
+  def __init__(self, domain, site, ssl=True, debug=False):
+    """Construct a new SitesUploader.
+
+    Args:
+      domain: The google apps domain to upload to.
+      site: The site within the domain.
+      ssl: Boolean.  Should SSL be used for all connections? Default: True.
+      debug: Boolean.  Should debug output be produced.  Default: False
+    """
+    self.domain = domain
+    self.site = site
+    self.ssl = ssl
+    self.debug = debug
+
+  def _GetClient(self, client_authz=ClientAuthorizer):
+    """Return a populated SitesClient object."""
+    client = gdata.sites.client.SitesClient(source=SOURCE, site=self.site,
+                                            domain=self.domain)
+    client.ssl = self.ssl
+    client.http_client.debug = self.debug
+    # Make sure we've got a valid token in the client.
+    client_authz().FetchClientToken(client)
+    return client
+
+  def _GetPage(self, client, page):
+    """Return the ContentEntry for page.
+
+    Throws:
+      Error: if the page can't be found.
+    """
+    uri = '%s?path=%s' % (client.MakeContentFeedUri(), page)
+    feed = client.GetContentFeed(uri)
+    if not feed.entry:
+      raise Error("can't find page %s" % opts.page)
+    return feed.entry[0]
+
+  def _FindAttachment(self, client, page, media_source):
+    """Return the attachment for media_source, or None."""
+    # The id of the parent we need to query by isn't exposed directly, so we
+    # parse it out of the id.  I'm not sure that this is the best way…
+    uri = '%s?parent=%s&kind=attachment' % (client.MakeContentFeedUri(),
+                                            os.path.basename(page.id.text))
+    feed = client.GetContentFeed(uri)
+    for entry in feed.entry:
+      href = entry.GetAlternateLink().href
+      # I'm not 100% happy with this check, but it appears to work.
+      if os.path.basename(href) == media_source.file_name:
+        return entry
+    return None
+
+  def UploadFile(self, page, file_to_upload,
+                content_type='application/octet-stream'):
+    """Upload file to page.
+
+    If file is already attached to page, it will be replaced.
+
+    Args:
+      page: The site-relative path to the page you wish to upload to.
+      file_to_upload: A pathname on the local filesystem.
+      content_type: The MIME type of the file to be uploaded.
+          Defaults to "application/octet-stream".
+
+    Returns:
+      A ContentEntry object for the attachment.  The URL for the newly
+      uploaded attachment is in GetAlternateLink().href.
+    """
+    client = self._GetClient()
+    parent = self._GetPage(client, page)
+    ms = gdata.data.MediaSource(file_path=file_to_upload,
+                                content_type=content_type)
+    attachment = self._FindAttachment(client, parent, ms)
+    if attachment:
+      client.Update(attachment, media_source=ms)
+    else:
+      attachment = client.UploadAttachment(ms, parent)
+    return attachment
+
 
 def GetParser():
   """Return a populated OptionParser"""
@@ -109,35 +189,6 @@ def GetParser():
   parser.add_option('--page', dest='page', help='* Page to upload to')
   return parser
 
-def GetClient(site, domain, ssl, debug=False, client_authz=ClientAuthorizer):
-  """Return a populated SitesClient object."""
-  client = gdata.sites.client.SitesClient(source=SOURCE, site=site,
-                                          domain=domain)
-  client.ssl = ssl
-  client.http_client.debug = debug
-  # Make sure we've got a valid token in the client.
-  client_authz().FetchClientToken(client)
-  return client
-
-def GetPage(client, page):
-  """Return the ContentEntry for page."""
-  uri = '%s?path=%s' % (client.MakeContentFeedUri(), page)
-  feed = client.GetContentFeed(uri)
-  if not feed.entry:
-    die("can't find page %s" % opts.page)
-  return feed.entry[0]
-
-def FindAttachment(client, page, media_source):
-  """Return the attachment for media_source, or None."""
-  uri = '%s?parent=%s&kind=attachment' % (client.MakeContentFeedUri(),
-                                          os.path.basename(page.id.text))
-  feed = client.GetContentFeed(uri)
-  for entry in feed.entry:
-    href = entry.GetAlternateLink().href
-    # I'm not 100% happy with this check, but it appears to work.
-    if os.path.basename(href) == media_source.file_name:
-      return entry
-  return None
 
 def main():
   parser = GetParser()
@@ -161,23 +212,10 @@ def main():
   if not opts.page.startswith('/'):
     opts.page = '/' + opts.page
 
-  client = GetClient(opts.site, opts.domain, opts.ssl, debug=opts.debug)
-
-  # Find the parent page.
-  parent = GetPage(client, opts.page)
-
-  # Make a “media source.”
-  ms = gdata.data.MediaSource(file_path=file_to_upload,
-                              content_type=opts.content_type)
-
-  # Does it already have an attachment by this name?
-  attachment = FindAttachment(client, parent, ms)
-
-  if attachment:
-    client.Update(attachment, media_source=ms)
-  else:
-    attachment = client.UploadAttachment(ms, parent)
+  uploader = SitesUploader(opts.domain, opts.site, opts.ssl, opts.debug)
+  attachment = uploader.UploadFile(opts.page, file_to_upload, opts.content_type)
   print attachment.GetAlternateLink().href
+
 
 if __name__ == '__main__':
   main()
