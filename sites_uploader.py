@@ -194,11 +194,8 @@ def main():
   parser = GetParser()
   (opts, args) = parser.parse_args()
 
-  if len(args) != 1:
-    parser.error('must specify a file to upload')
-  file_to_upload = args[0]
-  if not os.path.exists(file_to_upload):
-    die("no such file: %s" % file_to_upload)
+  if len(args) == 0:
+    parser.error('must specify file(s) to upload')
 
   if not opts.domain:
     parser.error('please specify --domain')
@@ -213,8 +210,11 @@ def main():
     opts.page = '/' + opts.page
 
   uploader = SitesUploader(opts.domain, opts.site, opts.ssl, opts.debug)
-  attachment = uploader.UploadFile(opts.page, file_to_upload, opts.content_type)
-  print attachment.GetAlternateLink().href
+  for file_to_upload in args:
+    if not os.path.exists(file_to_upload):
+      raise Error("no such file: %s" % file_to_upload)
+    attachment = uploader.UploadFile(opts.page, file_to_upload, opts.content_type)
+    print attachment.GetAlternateLink().href
 
 
 if __name__ == '__main__':
