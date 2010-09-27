@@ -27,34 +27,68 @@ CONSUMER_SECRET = 'anonymous'
 SCOPES = ['http://sites.google.com/feeds/',
           'https://sites.google.com/feeds/']
 
+class ClientAuthorizer():
+  """Add authorization to a client."""
+
+  def __init__(self, consumer_key=CONSUMER_KEY,
+               consumer_secret=CONSUMER_SECRET, scopes=None):
+    """Construct a new ClientAuthorizer."""
+    self.consumer_key = consumer_key
+    self.consumer_secret = consumer_secret
+    if scopes:
+      self.scopes = scopes
+    else:
+      self.scopes = SCOPES
+    self.tokfile = os.path.expanduser('~/.%s.tok' % os.path.basename(sys.argv[0]))
+
+  def ReadToken(self):
+    """Read in the stored auth token object.
+
+    Returns:
+      The stored token object, or None.
+    """
+    if os.path.exists(self.tokfile):
+      fh = open(self.tokfile, 'rb')
+      tok = pickle.load(fh)
+      fh.close()
+      return tok
+    else:
+      return None
+
+  def WriteToken(self, tok):
+    """Write the token object to a file."""
+    fh = open(self.tokfile, 'wb')
+    os.chmod(self.tokfile, 0600)
+    pickle.dump(tok, fh)
+    fh.close()
+
+  def FetchClientToken(self, client):
+    """Ensure client.auth_token is valid.
+
+    If a stored token is available, it will be used.  Otherwise, this goes
+    through the OAuth rituals described at:
+
+    http://code.google.com/apis/gdata/docs/auth/oauth.html#Examples
+    """
+    access_token = self.ReadToken()
+    if not access_token:
+      httpd = oneshot.ParamsReceiverServer()
+      # TODO Find a way to pass "xoauth_displayname" parameter.
+      request_token = client.GetOAuthToken(
+          self.scopes, httpd.my_url(), self.consumer_key, self.consumer_secret)
+      url = request_token.generate_authorization_url(google_apps_domain=client.domain)
+      print 'Please visit this URL to continue authorization:'
+      print url
+      httpd.serve_until_result()
+      request_token = gdata.gauth.AuthorizeRequestToken(request_token, httpd.result)
+      access_token = client.GetAccessToken(request_token)
+      self.WriteToken(access_token)
+    client.auth_token = access_token
+
 def die(msg):
   me = os.path.basename(sys.argv[0])
   print >>sys.stderr, me + ": " + msg
   sys.exit(1)
-
-def TokenFile():
-  """Return the token file."""
-  me = os.path.basename(sys.argv[0])
-  return os.path.expanduser('~/.%s.tok' % me)
-
-def ReadToken():
-  """Read in the stored auth token."""
-  file = TokenFile()
-  if os.path.exists(file):
-    fh = open(file, 'rb')
-    tok = pickle.load(fh)
-    fh.close()
-    return tok
-  else:
-    return None
-
-def WriteToken(tok):
-  """Write token to a file."""
-  path = TokenFile()
-  fh = open(path, 'wb')
-  os.chmod(path, 0600)
-  pickle.dump(tok, fh)
-  fh.close()
 
 def GetParser():
   """Return a populated OptionParser"""
@@ -75,30 +109,14 @@ def GetParser():
   parser.add_option('--page', dest='page', help='* Page to upload to')
   return parser
 
-def FetchClientToken(client):
-  """Ensure client has a valid token."""
-  access_token = ReadToken()
-  if not access_token:
-    httpd = oneshot.ParamsReceiverServer()
-    # TODO Find a way to pass "xoauth_displayname" parameter.
-    request_token = client.GetOAuthToken(
-        SCOPES, httpd.my_url(), CONSUMER_KEY, consumer_secret=CONSUMER_SECRET)
-    url = request_token.generate_authorization_url(google_apps_domain=client.domain)
-    print 'Please visit this URL to continue authorization:'
-    print url
-    httpd.serve_until_result()
-    request_token = gdata.gauth.AuthorizeRequestToken(request_token, httpd.result)
-    access_token = client.GetAccessToken(request_token)
-    WriteToken(access_token)
-  client.auth_token = access_token
-
-def GetClient(site, domain, ssl, debug=False):
+def GetClient(site, domain, ssl, debug=False, client_authz=ClientAuthorizer):
   """Return a populated SitesClient object."""
   client = gdata.sites.client.SitesClient(source=SOURCE, site=site,
                                           domain=domain)
   client.ssl = ssl
   client.http_client.debug = debug
-  FetchClientToken(client)
+  # Make sure we've got a valid token in the client.
+  client_authz().FetchClientToken(client)
   return client
 
 def GetPage(client, page):
