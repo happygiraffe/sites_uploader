@@ -107,14 +107,16 @@ class SitesUploader(object):
     self.debug = debug
     self.client = None
 
-  def _MakeClient(self, client_authz=ClientAuthorizer):
+  def _MakeClient(self, client_authz=None):
     """Return a populated SitesClient object."""
     client = gdata.sites.client.SitesClient(source=SOURCE, site=self.site,
                                             domain=self.domain)
     client.ssl = self.ssl
     client.http_client.debug = self.debug
     # Make sure we've got a valid token in the client.
-    client_authz().FetchClientToken(client)
+    if not client_authz:
+      client_authz = ClientAuthorizer()
+    client_authz.FetchClientToken(client)
     return client
 
   @property
