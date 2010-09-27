@@ -105,8 +105,9 @@ class SitesUploader(object):
     self.site = site
     self.ssl = ssl
     self.debug = debug
+    self.client = None
 
-  def _GetClient(self, client_authz=ClientAuthorizer):
+  def _MakeClient(self, client_authz=ClientAuthorizer):
     """Return a populated SitesClient object."""
     client = gdata.sites.client.SitesClient(source=SOURCE, site=self.site,
                                             domain=self.domain)
@@ -115,6 +116,12 @@ class SitesUploader(object):
     # Make sure we've got a valid token in the client.
     client_authz().FetchClientToken(client)
     return client
+
+  @property
+  def _client(self):
+    if not self.client:
+      self.client = self._MakeClient()
+    return self.client
 
   def _GetPage(self, client, page):
     """Return the ContentEntry for page.
@@ -158,7 +165,7 @@ class SitesUploader(object):
       A ContentEntry object for the attachment.  The URL for the newly
       uploaded attachment is in GetAlternateLink().href.
     """
-    client = self._GetClient()
+    client = self._client
     parent = self._GetPage(client, page)
     ms = gdata.data.MediaSource(file_path=file_to_upload,
                                 content_type=content_type)
