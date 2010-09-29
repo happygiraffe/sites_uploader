@@ -30,19 +30,13 @@ SCOPES = ['http://sites.google.com/feeds/',
 class Error(Exception):
   pass
 
-class ClientAuthorizer():
-  """Add authorization to a client."""
 
-  def __init__(self, consumer_key=CONSUMER_KEY,
-               consumer_secret=CONSUMER_SECRET, scopes=None):
-    """Construct a new ClientAuthorizer."""
-    self.consumer_key = consumer_key
-    self.consumer_secret = consumer_secret
-    if scopes:
-      self.scopes = scopes
-    else:
-      self.scopes = SCOPES
-    self.tokfile = os.path.expanduser('~/.%s.tok' % os.path.basename(sys.argv[0]))
+class TokenStore(object):
+  """Store and retreive OAuth access tokens."""
+
+  def __init__(self, token_file=None):
+    default = os.path.expanduser('~/.%s.tok' % os.path.basename(sys.argv[0]))
+    self.token_file = token_file or default
 
   def ReadToken(self):
     """Read in the stored auth token object.
@@ -50,8 +44,8 @@ class ClientAuthorizer():
     Returns:
       The stored token object, or None.
     """
-    if os.path.exists(self.tokfile):
-      fh = open(self.tokfile, 'rb')
+    if os.path.exists(self.token_file):
+      fh = open(self.token_file, 'rb')
       tok = pickle.load(fh)
       fh.close()
       return tok
@@ -60,10 +54,23 @@ class ClientAuthorizer():
 
   def WriteToken(self, tok):
     """Write the token object to a file."""
-    fh = open(self.tokfile, 'wb')
-    os.chmod(self.tokfile, 0600)
+    fh = open(self.token_file, 'wb')
+    os.chmod(self.token_file, 0600)
     pickle.dump(tok, fh)
     fh.close()
+
+
+class ClientAuthorizer(object):
+  """Add authorization to a client."""
+
+  def __init__(self, consumer_key=CONSUMER_KEY,
+               consumer_secret=CONSUMER_SECRET, scopes=None,
+               token_store=None):
+    """Construct a new ClientAuthorizer."""
+    self.consumer_key = consumer_key
+    self.consumer_secret = consumer_secret
+    self.scopes = scopes or SCOPES
+    self.token_store = token_store or TokenStore()
 
   def FetchClientToken(self, client):
     """Ensure client.auth_token is valid.
@@ -73,7 +80,7 @@ class ClientAuthorizer():
 
     http://code.google.com/apis/gdata/docs/auth/oauth.html#Examples
     """
-    access_token = self.ReadToken()
+    access_token = self.token_store.ReadToken()
     if not access_token:
       httpd = oneshot.ParamsReceiverServer()
       # TODO Find a way to pass "xoauth_displayname" parameter.
@@ -85,7 +92,7 @@ class ClientAuthorizer():
       httpd.serve_until_result()
       request_token = gdata.gauth.AuthorizeRequestToken(request_token, httpd.result)
       access_token = client.GetAccessToken(request_token)
-      self.WriteToken(access_token)
+      self.token_store.WriteToken(access_token)
     client.auth_token = access_token
 
 
