@@ -1,0 +1,12 @@
+#!/bin/sh
+
+for path in /opt/google/gdata-2.0.11/build/lib /opt/misc/mox-0.5.3/build/lib
+do
+  [[ -d $path ]] && PYTHONPATH="$PYTHONPATH:$path"
+done
+export PYTHONPATH
+
+for test in *_test.py
+do
+  python $test
+done
