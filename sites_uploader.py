@@ -141,7 +141,7 @@ class SitesUploader(object):
     uri = '%s?path=%s' % (client.MakeContentFeedUri(), page)
     feed = client.GetContentFeed(uri)
     if not feed.entry:
-      raise Error("can't find page %s" % opts.page)
+      raise Error("can't find page %s" % page)
     return feed.entry[0]
 
   def _FindAttachment(self, client, page, media_source):

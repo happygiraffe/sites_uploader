@@ -98,5 +98,17 @@ class SitesUploaderTest(unittest.TestCase):
     self.mox.VerifyAll()
     self.assertEquals('ContentEntry object', entry)
 
+  def testGetPageForNonexistentPage(self):
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    mock_client.MakeContentFeedUri().AndReturn('http://example.com/feed')
+    mock_content_feed = self.mox.CreateMock(gdata.sites.data.ContentFeed)
+    mock_content_feed.entry = []
+    mock_client.GetContentFeed('http://example.com/feed?path=/foo').AndReturn(mock_content_feed)
+    self.mox.ReplayAll()
+
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
+    self.assertRaises(sites_uploader.Error, uploader._GetPage, mock_client, '/foo')
+    self.mox.VerifyAll()
+
 if __name__ == '__main__':
   unittest.main()
