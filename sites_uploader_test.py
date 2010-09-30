@@ -3,6 +3,7 @@
 
 import gdata.gauth
 import gdata.sites.client
+import gdata.sites.data
 import mox
 import unittest
 
@@ -83,6 +84,19 @@ class SitesUploaderTest(unittest.TestCase):
     self.assertEquals(DOMAIN, client.domain)
     self.assertEquals(SITE, client.site)
     self.assertEquals(True, client.ssl)
+
+  def testGetPage(self):
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    mock_client.MakeContentFeedUri().AndReturn('http://example.com/feed')
+    mock_content_feed = self.mox.CreateMock(gdata.sites.data.ContentFeed)
+    mock_content_feed.entry = ['ContentEntry object']
+    mock_client.GetContentFeed('http://example.com/feed?path=/foo').AndReturn(mock_content_feed)
+    self.mox.ReplayAll()
+
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
+    entry = uploader._GetPage(mock_client, '/foo')
+    self.mox.VerifyAll()
+    self.assertEquals('ContentEntry object', entry)
 
 if __name__ == '__main__':
   unittest.main()
