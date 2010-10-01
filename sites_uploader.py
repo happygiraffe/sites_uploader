@@ -151,7 +151,7 @@ class SitesUploader(object):
     uri = '%s?parent=%s&kind=attachment' % (client.MakeContentFeedUri(),
                                             os.path.basename(page.id.text))
     feed = client.GetContentFeed(uri)
-    for entry in feed.entry:
+    for entry in feed.GetAttachments():
       href = entry.GetAlternateLink().href
       # I'm not 100% happy with this check, but it appears to work.
       if os.path.basename(href) == media_source.file_name:
