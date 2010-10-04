@@ -10,6 +10,8 @@ import gdata.sites.data
 import mox
 
 # Standard.
+import StringIO
+import tempfile
 import unittest
 
 # Mine.
@@ -164,6 +166,30 @@ class SitesUploaderTest(unittest.TestCase):
     self.mox.VerifyAll()
     self.assertTrue(existing_attachment is attachment,
                     '%s is not %s' % (attachment, existing_attachment))
+
+  def testUploadFileNew(self):
+    to_upload = gdata.data.MediaSource(file_handle=StringIO.StringIO('foo\n'),
+                                       content_length=4,
+                                       file_name='foo.txt')
+    page = self.SomePage()
+    alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
+    attachment = gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
+
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=mock_client)
+    self.mox.StubOutWithMock(uploader, '_GetPage')
+    uploader._GetPage(mock_client, '/files').AndReturn(page)
+    self.mox.StubOutWithMock(uploader, '_FindAttachment')
+    uploader._FindAttachment(mock_client, page, to_upload)
+    mock_client.UploadAttachment(to_upload, page).AndReturn(attachment)
+
+    self.mox.ReplayAll()
+
+    result = uploader.UploadFile('/files', to_upload)
+
+    self.mox.VerifyAll()
+
+    self.assertTrue(result is attachment)
 
 if __name__ == '__main__':
   unittest.main()
