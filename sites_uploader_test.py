@@ -176,22 +176,39 @@ class SitesUploaderTest(unittest.TestCase):
                                        content_length=len(contents),
                                        file_name=name)
 
-  def MockForUploadFile(self, to_upload, attachment):
-    page = self.SomePage()
+  def MockForUploadFile(self, to_upload, page):
+    """The common bits for mocking UploadFile."""
     mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=mock_client)
     self.mox.StubOutWithMock(uploader, '_GetPage')
     uploader._GetPage(mock_client, '/files').AndReturn(page)
     self.mox.StubOutWithMock(uploader, '_FindAttachment')
-    uploader._FindAttachment(mock_client, page, to_upload)
-    mock_client.UploadAttachment(to_upload, page).AndReturn(attachment)
-    return uploader
+    return uploader, mock_client
 
   def testUploadFileNew(self):
+    page = self.SomePage()
     to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
     attachment = self.MakeAttachment('http://example.com/foo.txt')
 
-    uploader = self.MockForUploadFile(to_upload, attachment)
+    uploader, mock_client = self.MockForUploadFile(to_upload, page)
+    uploader._FindAttachment(mock_client, page, to_upload)
+    mock_client.UploadAttachment(to_upload, page).AndReturn(attachment)
+    self.mox.ReplayAll()
+
+    result = uploader.UploadFile('/files', to_upload)
+
+    self.mox.VerifyAll()
+
+    self.assertTrue(result is attachment)
+
+  def testUploadFile(self):
+    page = self.SomePage()
+    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
+    attachment = self.MakeAttachment('http://example.com/foo.txt')
+
+    uploader, mock_client = self.MockForUploadFile(to_upload, page)
+    uploader._FindAttachment(mock_client, page, to_upload).AndReturn(attachment)
+    mock_client.Update(attachment, media_source=to_upload)
     self.mox.ReplayAll()
 
     result = uploader.UploadFile('/files', to_upload)
