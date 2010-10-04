@@ -99,7 +99,7 @@ class ClientAuthorizer(object):
 class SitesUploader(object):
   """A utility to upload a file to a sites page."""
 
-  def __init__(self, domain, site, ssl=True, debug=False):
+  def __init__(self, domain, site, ssl=True, debug=False, client=None):
     """Construct a new SitesUploader.
 
     Args:
@@ -107,12 +107,14 @@ class SitesUploader(object):
       site: The site within the domain.
       ssl: Boolean.  Should SSL be used for all connections? Default: True.
       debug: Boolean.  Should debug output be produced.  Default: False
+      client: A gdata.sites.client.SitesClient object.  If not supplied, one
+          will be created and populated with auth credentials on first use.
     """
     self.domain = domain
     self.site = site
     self.ssl = ssl
     self.debug = debug
-    self.client = None
+    self.client = client
 
   def _MakeClient(self, client_authz=None):
     """Return a populated SitesClient object."""
