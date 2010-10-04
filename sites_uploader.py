@@ -158,17 +158,14 @@ class SitesUploader(object):
         return entry
     return None
 
-  def UploadFile(self, page, file_to_upload,
-                content_type='application/octet-stream'):
+  def UploadFile(self, page, to_upload):
     """Upload file to page.
 
     If file is already attached to page, it will be replaced.
 
     Args:
       page: The site-relative path to the page you wish to upload to.
-      file_to_upload: A pathname on the local filesystem.
-      content_type: The MIME type of the file to be uploaded.
-          Defaults to "application/octet-stream".
+      to_upload: A gdata.data.MediaSource object containing the file to upload.
 
     Returns:
       A ContentEntry object for the attachment.  The URL for the newly
@@ -176,13 +173,11 @@ class SitesUploader(object):
     """
     client = self._client
     parent = self._GetPage(client, page)
-    ms = gdata.data.MediaSource(file_path=file_to_upload,
-                                content_type=content_type)
-    attachment = self._FindAttachment(client, parent, ms)
+    attachment = self._FindAttachment(client, parent, to_upload)
     if attachment:
-      client.Update(attachment, media_source=ms)
+      client.Update(attachment, media_source=to_upload)
     else:
-      attachment = client.UploadAttachment(ms, parent)
+      attachment = client.UploadAttachment(to_upload, parent)
     return attachment
 
 
@@ -229,7 +224,9 @@ def main():
   for file_to_upload in args:
     if not os.path.exists(file_to_upload):
       raise Error("no such file: %s" % file_to_upload)
-    attachment = uploader.UploadFile(opts.page, file_to_upload, opts.content_type)
+    media_source = gdata.data.MediaSource(file_path=file_to_upload,
+                                          content_type=content_type)
+    attachment = uploader.UploadFile(opts.page, media_source)
     print attachment.GetAlternateLink().href
 
 
