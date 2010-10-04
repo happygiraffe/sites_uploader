@@ -116,17 +116,26 @@ class SitesUploaderTest(unittest.TestCase):
     self.assertRaises(sites_uploader.Error, uploader._GetPage, mock_client, '/foo')
     self.mox.VerifyAll()
 
-  def testFindAttachmentWhenNotPresent(self):
-    # “Real” objects to play with.
+  def SomePage(self):
     page = gdata.sites.data.ContentEntry()
     page.id = atom.Id('http://example.com/42')
+    return page
+
+  def MockClientForGetAttachment(self, feed):
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
+    mock_client.GetContentFeed(
+        'http://example.com?parent=42&kind=attachment').AndReturn(feed)
+    return mock_client
+
+  def testFindAttachmentWhenNotPresent(self):
+    # “Real” objects to play with.
+    page = self.SomePage()
     media_source = gdata.data.MediaSource(file_name='foo.txt')
     feed = gdata.sites.data.ContentFeed()
 
     # Mock objects.
-    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
-    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
-    mock_client.GetContentFeed('http://example.com?parent=42&kind=attachment').AndReturn(feed)
+    mock_client = self.MockClientForGetAttachment(feed)
     self.mox.ReplayAll()
 
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
@@ -137,20 +146,16 @@ class SitesUploaderTest(unittest.TestCase):
 
   def testFindAttachmentWhenPresent(self):
     # “Real” objects to play with.
-    page = gdata.sites.data.ContentEntry()
-    page.id = atom.Id('http://example.com/42')
+    page = self.SomePage()
     media_source = gdata.data.MediaSource(file_name='foo.txt')
-    feed = gdata.sites.data.ContentFeed()
 
-    existing_attachment = gdata.sites.data.ContentEntry(kind='attachment')
-    existing_attachment.link.append(
-        atom.data.Link(rel='alternate', href='http://example.com/foo.txt'))
-    feed.entry.append(existing_attachment)
+    alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
+    existing_attachment = gdata.sites.data.ContentEntry(kind='attachment',
+                                                        link=[alt_link])
+    feed = gdata.sites.data.ContentFeed(entry=[existing_attachment])
 
     # Mock objects.
-    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
-    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
-    mock_client.GetContentFeed('http://example.com?parent=42&kind=attachment').AndReturn(feed)
+    mock_client = self.MockClientForGetAttachment(feed)
     self.mox.ReplayAll()
 
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
