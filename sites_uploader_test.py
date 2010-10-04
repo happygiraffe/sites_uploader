@@ -1,12 +1,18 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Third party.
+import atom
+import atom.data
 import gdata.gauth
 import gdata.sites.client
 import gdata.sites.data
 import mox
+
+# Standard.
 import unittest
 
+# Mine.
 import oneshot
 import sites_uploader
 
@@ -109,6 +115,50 @@ class SitesUploaderTest(unittest.TestCase):
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
     self.assertRaises(sites_uploader.Error, uploader._GetPage, mock_client, '/foo')
     self.mox.VerifyAll()
+
+  def testFindAttachmentWhenNotPresent(self):
+    # “Real” objects to play with.
+    page = gdata.sites.data.ContentEntry()
+    page.id = atom.Id('http://example.com/42')
+    media_source = gdata.data.MediaSource(file_name='foo.txt')
+    feed = gdata.sites.data.ContentFeed()
+
+    # Mock objects.
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
+    mock_client.GetContentFeed('http://example.com?parent=42&kind=attachment').AndReturn(feed)
+    self.mox.ReplayAll()
+
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
+    attachment = uploader._FindAttachment(mock_client, page, media_source)
+
+    self.mox.VerifyAll()
+    self.assertEquals(None, attachment)
+
+  def testFindAttachmentWhenPresent(self):
+    # “Real” objects to play with.
+    page = gdata.sites.data.ContentEntry()
+    page.id = atom.Id('http://example.com/42')
+    media_source = gdata.data.MediaSource(file_name='foo.txt')
+    feed = gdata.sites.data.ContentFeed()
+
+    existing_attachment = gdata.sites.data.ContentEntry(kind='attachment')
+    existing_attachment.link.append(
+        atom.data.Link(rel='alternate', href='http://example.com/foo.txt'))
+    feed.entry.append(existing_attachment)
+
+    # Mock objects.
+    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
+    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
+    mock_client.GetContentFeed('http://example.com?parent=42&kind=attachment').AndReturn(feed)
+    self.mox.ReplayAll()
+
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
+    attachment = uploader._FindAttachment(mock_client, page, media_source)
+
+    self.mox.VerifyAll()
+    self.assertTrue(existing_attachment is attachment,
+                    '%s is not %s' % (attachment, existing_attachment))
 
 if __name__ == '__main__':
   unittest.main()
