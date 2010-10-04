@@ -167,14 +167,17 @@ class SitesUploaderTest(unittest.TestCase):
     self.assertTrue(existing_attachment is attachment,
                     '%s is not %s' % (attachment, existing_attachment))
 
-  def testUploadFileNew(self):
-    to_upload = gdata.data.MediaSource(file_handle=StringIO.StringIO('foo\n'),
-                                       content_length=4,
-                                       file_name='foo.txt')
-    page = self.SomePage()
-    alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
-    attachment = gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
+  def MakeAttachment(self, href):
+    alt_link = atom.data.Link(rel='alternate', href=href)
+    return gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
 
+  def MakeMediaSource(self, name, contents):
+    return gdata.data.MediaSource(file_handle=StringIO.StringIO(contents),
+                                       content_length=len(contents),
+                                       file_name=name)
+
+  def MockForUploadFile(self, to_upload, attachment):
+    page = self.SomePage()
     mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=mock_client)
     self.mox.StubOutWithMock(uploader, '_GetPage')
@@ -182,7 +185,13 @@ class SitesUploaderTest(unittest.TestCase):
     self.mox.StubOutWithMock(uploader, '_FindAttachment')
     uploader._FindAttachment(mock_client, page, to_upload)
     mock_client.UploadAttachment(to_upload, page).AndReturn(attachment)
+    return uploader
 
+  def testUploadFileNew(self):
+    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
+    attachment = self.MakeAttachment('http://example.com/foo.txt')
+
+    uploader = self.MockForUploadFile(to_upload, attachment)
     self.mox.ReplayAll()
 
     result = uploader.UploadFile('/files', to_upload)
