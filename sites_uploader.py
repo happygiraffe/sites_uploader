@@ -227,7 +227,7 @@ def main():
     if not os.path.exists(file_to_upload):
       raise Error("no such file: %s" % file_to_upload)
     media_source = gdata.data.MediaSource(file_path=file_to_upload,
-                                          content_type=content_type)
+                                          content_type=opts.content_type)
     attachment = uploader.UploadFile(opts.page, media_source)
     print attachment.GetAlternateLink().href
 
