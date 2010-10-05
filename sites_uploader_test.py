@@ -1,6 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+"""Tests for site_uploader.
+
+These are fairly nasty due to the extensive mocking going on.  Suggestions
+for improvements would be welcome.
+"""
+
 # Third party.
 import atom
 import atom.data
