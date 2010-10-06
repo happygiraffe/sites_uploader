@@ -81,6 +81,23 @@ class ClientAuthorizerTestCase(unittest.TestCase):
     self.assertEquals(mock_client.auth_token, '12345')
 
 
+# A few helpers to construct gdata objects.
+def MakeAttachment(href):
+  alt_link = atom.data.Link(rel='alternate', href=href)
+  return gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
+
+
+def MakePage(href):
+  alt_link = atom.data.Link(rel='alternate', href=href)
+  return gdata.sites.data.ContentEntry(id=atom.data.Id(href), link=[alt_link])
+
+
+def MakeMediaSource(name, contents):
+  return gdata.data.MediaSource(file_handle=StringIO.StringIO(contents),
+                                content_length=len(contents),
+                                file_name=name)
+
+
 class StubSitesClient(object):
   """A stubbed out gdata.sites.client.SitesClient.
 
@@ -103,13 +120,7 @@ class StubSitesClient(object):
   def _MakePageFeed(self, path):
     """Make a feed with a single entry (a page)."""
     href = self._Base() + path
-    alt_link = atom.data.Link(rel='alternate', href=href)
-    page = gdata.sites.data.ContentEntry(id=atom.data.Id(href), link=[alt_link])
-    return gdata.sites.data.ContentFeed(entry=[page])
-
-  def _MakeAttachment(self, href):
-    alt_link = atom.data.Link(rel='alternate', href=href)
-    return gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
+    return gdata.sites.data.ContentFeed(entry=[MakePage(href)])
 
   def MakeContentFeedUri(self):
     return self._Base() + '/feed'
@@ -124,7 +135,7 @@ class StubSitesClient(object):
 
   def UploadAttachment(self, media_source, parent):
     href = parent.GetAlternateLink().href + '/' + media_source.file_name
-    return self._MakeAttachment(href)
+    return MakeAttachment(href)
 
   def Update(self, attachment, media_source):
     pass
@@ -176,11 +187,6 @@ class SitesUploaderTest(unittest.TestCase):
     self.assertRaises(sites_uploader.Error, uploader._GetPage, mock_client, '/foo')
     self.mox.VerifyAll()
 
-  def SomePage(self):
-    page = gdata.sites.data.ContentEntry()
-    page.id = atom.Id('http://example.com/42')
-    return page
-
   def MockClientForGetAttachment(self, feed):
     mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
     mock_client.MakeContentFeedUri().AndReturn('http://example.com')
@@ -190,7 +196,7 @@ class SitesUploaderTest(unittest.TestCase):
 
   def testFindAttachmentWhenNotPresent(self):
     # “Real” objects to play with.
-    page = self.SomePage()
+    page = MakePage('http://example.com/42')
     media_source = gdata.data.MediaSource(file_name='foo.txt')
     feed = gdata.sites.data.ContentFeed()
 
@@ -206,7 +212,7 @@ class SitesUploaderTest(unittest.TestCase):
 
   def testFindAttachmentWhenPresent(self):
     # “Real” objects to play with.
-    page = self.SomePage()
+    page = MakePage('http://example.com/42')
     media_source = gdata.data.MediaSource(file_name='foo.txt')
 
     alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
@@ -225,17 +231,8 @@ class SitesUploaderTest(unittest.TestCase):
     self.assertTrue(existing_attachment is attachment,
                     '%s is not %s' % (attachment, existing_attachment))
 
-  def MakeAttachment(self, href):
-    alt_link = atom.data.Link(rel='alternate', href=href)
-    return gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
-
-  def MakeMediaSource(self, name, contents):
-    return gdata.data.MediaSource(file_handle=StringIO.StringIO(contents),
-                                       content_length=len(contents),
-                                       file_name=name)
-
   def testUploadFileNotAlreadyPresent(self):
-    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
+    to_upload = MakeMediaSource('foo.txt', 'foo\n')
 
     stub_client = StubSitesClient()
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=stub_client)
@@ -243,10 +240,11 @@ class SitesUploaderTest(unittest.TestCase):
 
     self.assertEquals('http://example.com/files/foo.txt',
                       result.GetAlternateLink().href)
+    # XXX Test attachment content
 
   def testUploadFileOverwritesExisting(self):
-    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
-    attachment = self.MakeAttachment('http://example.com/files/foo.txt')
+    to_upload = MakeMediaSource('foo.txt', 'foo\n')
+    attachment = MakeAttachment('http://example.com/files/foo.txt')
     attachment_feed = gdata.sites.data.ContentFeed(entry=[attachment])
 
     stub_client = StubSitesClient(attachment_feed=attachment_feed)
@@ -254,6 +252,7 @@ class SitesUploaderTest(unittest.TestCase):
     result = uploader.UploadFile('/files', to_upload)
 
     self.assertTrue(result is attachment)
+    # XXX Test attachment content
 
 
 if __name__ == '__main__':
