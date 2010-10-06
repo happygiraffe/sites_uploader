@@ -17,6 +17,8 @@ import mox
 
 # Standard.
 import StringIO
+import os
+import re
 import tempfile
 import unittest
 
@@ -77,6 +79,56 @@ class ClientAuthorizerTestCase(unittest.TestCase):
     authz.FetchClientToken(mock_client)
     # TODO: use a real token object.
     self.assertEquals(mock_client.auth_token, '12345')
+
+
+class StubSitesClient(object):
+  """A stubbed out gdata.sites.client.SitesClient.
+
+  This is just enough of an implementation to allow me to get the tests to
+  run.
+  """
+
+  def __init__(self, attachment_feed=None):
+    """Construct a new StubSitesClient.
+
+    Args:
+      attachment_feed: A gdata.sites.ContentFeed for the attachments of
+          a page.
+    """
+    self.attachment_feed = attachment_feed or gdata.sites.data.ContentFeed()
+
+  def _Base(self):
+    return 'http://' + DOMAIN
+
+  def _MakePageFeed(self, path):
+    """Make a feed with a single entry (a page)."""
+    href = self._Base() + path
+    alt_link = atom.data.Link(rel='alternate', href=href)
+    page = gdata.sites.data.ContentEntry(id=atom.data.Id(href), link=[alt_link])
+    return gdata.sites.data.ContentFeed(entry=[page])
+
+  def _MakeAttachment(self, href):
+    alt_link = atom.data.Link(rel='alternate', href=href)
+    return gdata.sites.data.ContentEntry(kind='attachment', link=[alt_link])
+
+  def MakeContentFeedUri(self):
+    return self._Base() + '/feed'
+
+  def GetContentFeed(self, uri):
+    # If it looks like we're being asked for a page, give one.
+    m = re.search(r'\bpath=([^&#]+)', uri)
+    if m:
+      return self._MakePageFeed(m.group(1))
+    else:
+      return self.attachment_feed
+
+  def UploadAttachment(self, media_source, parent):
+    href = parent.GetAlternateLink().href + '/' + media_source.file_name
+    return self._MakeAttachment(href)
+
+  def Update(self, attachment, media_source):
+    pass
+
 
 class SitesUploaderTest(unittest.TestCase):
 
@@ -182,46 +234,27 @@ class SitesUploaderTest(unittest.TestCase):
                                        content_length=len(contents),
                                        file_name=name)
 
-  def MockForUploadFile(self, to_upload, page):
-    """The common bits for mocking UploadFile."""
-    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
-    uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=mock_client)
-    self.mox.StubOutWithMock(uploader, '_GetPage')
-    uploader._GetPage(mock_client, '/files').AndReturn(page)
-    self.mox.StubOutWithMock(uploader, '_FindAttachment')
-    return uploader, mock_client
-
-  def testUploadFileNew(self):
-    page = self.SomePage()
+  def testUploadFileNotAlreadyPresent(self):
     to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
-    attachment = self.MakeAttachment('http://example.com/foo.txt')
 
-    uploader, mock_client = self.MockForUploadFile(to_upload, page)
-    uploader._FindAttachment(mock_client, page, to_upload)
-    mock_client.UploadAttachment(to_upload, page).AndReturn(attachment)
-    self.mox.ReplayAll()
-
+    stub_client = StubSitesClient()
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=stub_client)
     result = uploader.UploadFile('/files', to_upload)
 
-    self.mox.VerifyAll()
+    self.assertEquals('http://example.com/files/foo.txt',
+                      result.GetAlternateLink().href)
+
+  def testUploadFileOverwritesExisting(self):
+    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
+    attachment = self.MakeAttachment('http://example.com/files/foo.txt')
+    attachment_feed = gdata.sites.data.ContentFeed(entry=[attachment])
+
+    stub_client = StubSitesClient(attachment_feed=attachment_feed)
+    uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=stub_client)
+    result = uploader.UploadFile('/files', to_upload)
 
     self.assertTrue(result is attachment)
 
-  def testUploadFile(self):
-    page = self.SomePage()
-    to_upload = self.MakeMediaSource('foo.txt', 'foo\n')
-    attachment = self.MakeAttachment('http://example.com/foo.txt')
-
-    uploader, mock_client = self.MockForUploadFile(to_upload, page)
-    uploader._FindAttachment(mock_client, page, to_upload).AndReturn(attachment)
-    mock_client.Update(attachment, media_source=to_upload)
-    self.mox.ReplayAll()
-
-    result = uploader.UploadFile('/files', to_upload)
-
-    self.mox.VerifyAll()
-
-    self.assertTrue(result is attachment)
 
 if __name__ == '__main__':
   unittest.main()
