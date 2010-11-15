@@ -1,12 +1,20 @@
 #!/bin/sh
 
+PYTHON=python2.6
+FIGLEAF=/opt/misc/figleaf-latest/bin/figleaf
+
 for path in /opt/google/gdata-2.0.12/build/lib /opt/misc/mox-0.5.3/build/lib
 do
   [[ -d $path ]] && PYTHONPATH="$PYTHONPATH:$path"
 done
 export PYTHONPATH
 
+PREFIX=$PYTHON
+if [[ $1 == --figleaf ]] ; then
+  PREFIX="$PYTHON $FIGLEAF"
+fi
+
 for test in *_test.py
 do
-  python $test
+  $PREFIX $test
 done
