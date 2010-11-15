@@ -240,7 +240,6 @@ class SitesUploaderTest(unittest.TestCase):
 
     self.assertEquals('http://example.com/files/foo.txt',
                       result.GetAlternateLink().href)
-    # XXX Test attachment content
 
   def testUploadFileOverwritesExisting(self):
     to_upload = MakeMediaSource('foo.txt', 'foo\n')
@@ -251,8 +250,8 @@ class SitesUploaderTest(unittest.TestCase):
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE, client=stub_client)
     result = uploader.UploadFile('/files', to_upload)
 
-    self.assertTrue(result is attachment)
-    # XXX Test attachment content
+    self.assertEquals('http://example.com/files/foo.txt',
+                      result.GetAlternateLink().href)
 
 
 if __name__ == '__main__':
