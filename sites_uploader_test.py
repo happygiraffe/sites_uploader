@@ -129,7 +129,11 @@ class StubSitesClient(object):
     # If it looks like we're being asked for a page, give one.
     m = re.search(r'\bpath=([^&#]+)', uri)
     if m:
-      return self._MakePageFeed(m.group(1))
+      if m.group(1) == '/nonexistent':
+        # 404
+        return gdata.sites.data.ContentFeed()
+      else:
+        return self._MakePageFeed(m.group(1))
     else:
       return self.attachment_feed
 
@@ -143,91 +147,52 @@ class StubSitesClient(object):
 
 class SitesUploaderTest(unittest.TestCase):
 
-  def setUp(self):
-    self.mox = mox.Mox()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-
   def testMakeClient(self):
-    mock_authz = self.mox.CreateMock(sites_uploader.ClientAuthorizer)
-    mock_authz.FetchClientToken(mox.IsA(gdata.sites.client.SitesClient))
-    self.mox.ReplayAll()
+    class StubClientAuthorizer(object):
+      def FetchClientToken(self, client):
+        client.auth_token = 'abc12345'
 
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
-    client = uploader._MakeClient(mock_authz)
+    client = uploader._MakeClient(StubClientAuthorizer())
 
-    self.mox.VerifyAll()
     self.assertEquals(DOMAIN, client.domain)
     self.assertEquals(SITE, client.site)
     self.assertEquals(True, client.ssl)
-
-  def _MockGetPage(self, *entries):
-    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
-    mock_client.MakeContentFeedUri().AndReturn('http://example.com/feed')
-    mock_content_feed = self.mox.CreateMock(gdata.sites.data.ContentFeed)
-    mock_content_feed.entry = entries
-    mock_client.GetContentFeed('http://example.com/feed?path=/foo').AndReturn(mock_content_feed)
-    return mock_client
+    self.assertEquals('abc12345', client.auth_token)
 
   def testGetPage(self):
-    mock_client = self._MockGetPage('ContentEntry object')
-    self.mox.ReplayAll()
-
+    stub_client = StubSitesClient()
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
-    entry = uploader._GetPage(mock_client, '/foo')
-    self.mox.VerifyAll()
-    self.assertEquals('ContentEntry object', entry)
+    entry = uploader._GetPage(stub_client, '/foo')
+    self.assertEquals('http://example.com/foo', entry.GetAlternateLink().href)
 
   def testGetPageForNonexistentPage(self):
-    mock_client = self._MockGetPage()
-    self.mox.ReplayAll()
-
+    stub_client = StubSitesClient()
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
-    self.assertRaises(sites_uploader.Error, uploader._GetPage, mock_client, '/foo')
-    self.mox.VerifyAll()
-
-  def MockClientForGetAttachment(self, feed):
-    mock_client = self.mox.CreateMock(gdata.sites.client.SitesClient)
-    mock_client.MakeContentFeedUri().AndReturn('http://example.com')
-    mock_client.GetContentFeed(
-        'http://example.com?parent=42&kind=attachment').AndReturn(feed)
-    return mock_client
+    self.assertRaises(sites_uploader.Error,
+                      uploader._GetPage, stub_client, '/nonexistent')
 
   def testFindAttachmentWhenNotPresent(self):
-    # “Real” objects to play with.
-    page = MakePage('http://example.com/42')
-    media_source = MakeMediaSource('foo.txt', 'foo\n')
-    feed = gdata.sites.data.ContentFeed()
-
-    # Mock objects.
-    mock_client = self.MockClientForGetAttachment(feed)
-    self.mox.ReplayAll()
+    stub_client = StubSitesClient()
 
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
-    attachment = uploader._FindAttachment(mock_client, page, media_source)
+    attachment = uploader._FindAttachment(stub_client,
+                                          MakePage('http://example.com/42'),
+                                          MakeMediaSource('foo.txt', 'foo\n'))
 
-    self.mox.VerifyAll()
     self.assertEquals(None, attachment)
 
   def testFindAttachmentWhenPresent(self):
     # “Real” objects to play with.
-    page = MakePage('http://example.com/42')
-    media_source = MakeMediaSource('foo.txt', 'foo\n')
-
-    alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
-    existing_attachment = gdata.sites.data.ContentEntry(kind='attachment',
-                                                        link=[alt_link])
+    existing_attachment = MakeAttachment('http://example.com/foo.txt')
     feed = gdata.sites.data.ContentFeed(entry=[existing_attachment])
 
-    # Mock objects.
-    mock_client = self.MockClientForGetAttachment(feed)
-    self.mox.ReplayAll()
-
+    stub_client = StubSitesClient(attachment_feed=feed)
     uploader = sites_uploader.SitesUploader(DOMAIN, SITE)
-    attachment = uploader._FindAttachment(mock_client, page, media_source)
+    attachment = uploader._FindAttachment(stub_client,
+                                          MakePage('http://example.com/42'),
+                                          MakeMediaSource('foo.txt', 'foo\n'))
 
-    self.mox.VerifyAll()
     self.assertTrue(existing_attachment is attachment,
                     '%s is not %s' % (attachment, existing_attachment))
 
