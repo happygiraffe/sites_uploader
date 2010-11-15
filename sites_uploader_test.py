@@ -197,7 +197,7 @@ class SitesUploaderTest(unittest.TestCase):
   def testFindAttachmentWhenNotPresent(self):
     # “Real” objects to play with.
     page = MakePage('http://example.com/42')
-    media_source = gdata.data.MediaSource(file_name='foo.txt')
+    media_source = MakeMediaSource('foo.txt', 'foo\n')
     feed = gdata.sites.data.ContentFeed()
 
     # Mock objects.
@@ -213,7 +213,7 @@ class SitesUploaderTest(unittest.TestCase):
   def testFindAttachmentWhenPresent(self):
     # “Real” objects to play with.
     page = MakePage('http://example.com/42')
-    media_source = gdata.data.MediaSource(file_name='foo.txt')
+    media_source = MakeMediaSource('foo.txt', 'foo\n')
 
     alt_link = atom.data.Link(rel='alternate', href='http://example.com/foo.txt')
     existing_attachment = gdata.sites.data.ContentEntry(kind='attachment',
